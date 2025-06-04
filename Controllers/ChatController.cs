@@ -65,6 +65,36 @@ public class ChatController : ControllerBase
         }
     }
 
+    //Recebe chave pública de outros terminais durante handshake
+    [HttpPost("key")]
+    public IActionResult ReceivePublicKey([FromBody] PublicKeyDTO keyDto)
+    {
+        try
+        {
+            // Converte as strings para BigInteger e armazena a chave pública
+            BigInteger n = BigInteger.Parse(keyDto.N);
+            BigInteger e = BigInteger.Parse(keyDto.E);
+            PublicKeys[keyDto.Name] = (n, e, keyDto.Url);
+            
+            Console.WriteLine($"Chave pública recebida de {keyDto.Name}!");
+            
+            // Retorna nossa chave pública como resposta
+            var myKey = new PublicKeyDTO
+            {
+                Name = _chatConfig.Name,
+                N = _rsaKeyService.N.ToString(),
+                E = _rsaKeyService.E.ToString(),
+                Url = _chatConfig.Url
+            };
+            
+            return Ok(myKey);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"Erro ao processar chave pública: {ex.Message}");
+        }
+    }
+
     //Envia mensagens
     [HttpPost("send-simple")]
     public async Task<IActionResult> SendSimpleMessage([FromBody] SimpleMessageDTO message)
@@ -130,6 +160,66 @@ public class ChatController : ControllerBase
             TotalMessages = ReceivedMessages.Count,
             Messages = ReceivedMessages.OrderBy(m => m.Timestamp).ToList()
         });
+    }
+
+    //Recebe mensagens de outros terminais
+    [HttpPost("message")]
+    public IActionResult ReceiveMessage([FromBody] MessageDTO messageDto)
+    {
+        try
+        {
+            // Verifica se conhecemos o remetente (temos sua chave pública)
+            if (!PublicKeys.TryGetValue(messageDto.Sender, out var senderPublicKey))
+            {
+                return BadRequest($"Remetente {messageDto.Sender} não reconhecido. Realize handshake primeiro.");
+            }
+
+            //Descriptografa a mensagem usando nossa chave privada
+            string decryptedMessage = EncoderRSA.Decrypt(
+                messageDto.EncryptedMessage,
+                _rsaKeyService.D,
+                _rsaKeyService.N
+            );
+
+            //Descriptografa a assinatura usando a chave pública do remetente
+            string decryptedSignature = EncoderRSA.Decrypt(
+                messageDto.Signature,
+                senderPublicKey.E,
+                senderPublicKey.N
+            );
+
+            //Valida a assinatura usando o StringAuthenticator
+            bool isSignatureValid = SHA256Assigner.StringAuthenticator(
+                decryptedMessage,
+                decryptedSignature
+            );
+
+            if (!isSignatureValid)
+            {
+                Console.WriteLine($"❌ Assinatura inválida da mensagem de {messageDto.Sender}");
+                return BadRequest("Assinatura da mensagem é inválida. Mensagem rejeitada.");
+            }
+
+            //Se chegou até aqui, a mensagem é válida - armazena
+            var receivedMessage = new ReceivedMessageDTO
+            {
+                Sender = messageDto.Sender,
+                Message = decryptedMessage,
+                Timestamp = DateTime.Now
+            };
+
+            ReceivedMessages.Add(receivedMessage);
+
+            Console.WriteLine($"✅ Mensagem recebida de {messageDto.Sender}: {decryptedMessage}");
+            Console.WriteLine($"🔐 Assinatura validada com sucesso!");
+
+            return Ok("Mensagem recebida e validada com sucesso");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro ao processar mensagem de {messageDto.Sender}: {ex.Message}");
+            return BadRequest($"Erro ao processar mensagem: {ex.Message}");
+        }
     }
 
     //Lista todas as conexoes
