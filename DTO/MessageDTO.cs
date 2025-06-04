@@ -1,3 +1,5 @@
+namespace DTO;
+
 public class MessageDTO
 {
     public string Sender { get; set; }

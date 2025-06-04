@@ -263,4 +263,10 @@ public class SHA256Assigner
         string currAssignature = AssignFile(path);
         return currAssignature == assignature;
     }
+
+    public static bool StringAuthenticator(string input, string assignature)
+    {
+        string currAssignature = AssignString(input);
+        return currAssignature == assignature;
+    }
 }

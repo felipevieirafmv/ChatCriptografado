@@ -1,11 +1,39 @@
+using Services;
 using Utils;
 
-var keys = EncoderRSA.GenerateKeys();
+var builder = WebApplication.CreateBuilder(args);
 
-string message = "teste";
+// Configura a injeção da configuração vinda do appsettings.{Ambiente}.json
+builder.Services.Configure<ChatConfig>(
+    builder.Configuration.GetSection("ChatConfig")
+);
 
-var encrypted = EncoderRSA.Encrypt(message, keys.E, keys.N);
-Console.WriteLine("Encrypted: " + encrypted);
+// Configura a URL baseada no appsettings do ambiente
+var chatConfig = builder.Configuration.GetSection("ChatConfig");
+var url = chatConfig.GetValue<string>("Url");
+if (!string.IsNullOrEmpty(url))
+{
+    builder.WebHost.UseUrls(url);
+}
 
-var decrypted = EncoderRSA.Decrypt(encrypted, keys.D, keys.N);
-Console.WriteLine("Decrypted: " + decrypted);
+// Adiciona os serviços necessários
+builder.Services.AddSingleton<RSAKeyService>();
+builder.Services.AddControllers();
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Habilita Swagger para Development, Bruno e Felipe
+if (app.Environment.IsDevelopment() || 
+    app.Environment.IsEnvironment("Bruno") || 
+    app.Environment.IsEnvironment("Felipe"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.MapControllers();
+
+app.Run();
