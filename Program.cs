@@ -25,9 +25,9 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Habilita Swagger para Development, Bruno e Felipe
 if (app.Environment.IsDevelopment() || 
     app.Environment.IsEnvironment("Bruno") || 
+    app.Environment.IsEnvironment("Teste") || 
     app.Environment.IsEnvironment("Felipe"))
 {
     app.UseSwagger();
